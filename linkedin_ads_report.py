@@ -25,63 +25,148 @@ class LinkedInAdsClient:
             "LinkedIn-Version": "202411"
         }
     
+    def test_connection(self) -> bool:
+        """Test if the access token is valid"""
+        url = f"{self.base_url}/v2/me"
+        try:
+            print("Testing API connection...")
+            response = requests.get(url, headers=self.headers)
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✓ Connected as: {data.get('localizedFirstName', '')} {data.get('localizedLastName', '')}")
+                return True
+            else:
+                print(f"✗ Connection failed: {response.status_code}")
+                print(f"  Response: {response.text}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Connection error: {e}")
+            return False
+    
     def get_campaigns(self) -> List[Dict]:
         """Fetch all campaigns for the account"""
-        url = f"{self.base_url}/rest/adCampaigns"
-        params = {
-            "q": "search",
-            "search": f"(account:(values:List(urn:li:sponsoredAccount:{self.account_id})))"
-        }
+        # Try multiple endpoint formats
+        endpoints = [
+            (f"{self.base_url}/v2/adCampaignsV2", {
+                "q": "search",
+                "search.account.values[0]": f"urn:li:sponsoredAccount:{self.account_id}"
+            }),
+            (f"{self.base_url}/rest/adCampaigns", {
+                "q": "account",
+                "account": f"urn:li:sponsoredAccount:{self.account_id}"
+            })
+        ]
         
-        try:
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("elements", [])
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching campaigns: {e}")
-            return []
+        for url, params in endpoints:
+            try:
+                print(f"  Trying: {url}")
+                response = requests.get(url, headers=self.headers, params=params)
+                print(f"  Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    elements = data.get("elements", [])
+                    if elements:
+                        print(f"  ✓ Success! Found {len(elements)} campaigns")
+                        return elements
+                else:
+                    print(f"  Response: {response.text[:200]}")
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"  Error: {e}")
+                continue
+        
+        print("  ✗ All campaign endpoints failed")
+        return []
     
     def get_creatives(self) -> List[Dict]:
         """Fetch all creatives (ads) for the account"""
-        url = f"{self.base_url}/rest/creatives"
-        params = {
-            "q": "search",
-            "search": f"(account:(values:List(urn:li:sponsoredAccount:{self.account_id})))"
-        }
+        # Try multiple endpoint formats
+        endpoints = [
+            (f"{self.base_url}/v2/adCreativesV2", {
+                "q": "search",
+                "search.account.values[0]": f"urn:li:sponsoredAccount:{self.account_id}"
+            }),
+            (f"{self.base_url}/rest/creatives", {
+                "q": "account",
+                "account": f"urn:li:sponsoredAccount:{self.account_id}"
+            })
+        ]
         
-        try:
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("elements", [])
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching creatives: {e}")
-            return []
+        for url, params in endpoints:
+            try:
+                print(f"  Trying: {url}")
+                response = requests.get(url, headers=self.headers, params=params)
+                print(f"  Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    elements = data.get("elements", [])
+                    if elements:
+                        print(f"  ✓ Success! Found {len(elements)} creatives")
+                        return elements
+                else:
+                    print(f"  Response: {response.text[:200]}")
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"  Error: {e}")
+                continue
+        
+        print("  ✗ All creative endpoints failed")
+        return []
     
     def get_analytics(self, days: int = 7) -> List[Dict]:
         """Fetch analytics data for the last N days"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         
-        url = f"{self.base_url}/rest/adAnalytics"
-        params = {
-            "q": "analytics",
-            "pivot": "CAMPAIGN,CREATIVE",
-            "dateRange": f"(start:(day:{start_date.day},month:{start_date.month},year:{start_date.year}),"
-                        f"end:(day:{end_date.day},month:{end_date.month},year:{end_date.year}))",
-            "accounts": f"List(urn:li:sponsoredAccount:{self.account_id})",
-            "fields": "clicks,impressions,landingPageClicks,pivotValues"
-        }
+        # Try multiple endpoint formats
+        endpoints = [
+            # v2 format
+            (f"{self.base_url}/v2/adAnalyticsV2", {
+                "q": "analytics",
+                "pivot": "CAMPAIGN,CREATIVE",
+                "dateRange.start.day": start_date.day,
+                "dateRange.start.month": start_date.month,
+                "dateRange.start.year": start_date.year,
+                "dateRange.end.day": end_date.day,
+                "dateRange.end.month": end_date.month,
+                "dateRange.end.year": end_date.year,
+                "accounts[0]": f"urn:li:sponsoredAccount:{self.account_id}",
+                "fields": "clicks,impressions,landingPageClicks,pivotValues"
+            }),
+            # REST format
+            (f"{self.base_url}/rest/adAnalytics", {
+                "q": "analytics",
+                "pivot": "CAMPAIGN,CREATIVE",
+                "dateRange": f"(start:(day:{start_date.day},month:{start_date.month},year:{start_date.year}),"
+                            f"end:(day:{end_date.day},month:{end_date.month},year:{end_date.year}))",
+                "accounts": f"List(urn:li:sponsoredAccount:{self.account_id})",
+                "fields": "clicks,impressions,landingPageClicks,pivotValues"
+            })
+        ]
         
-        try:
-            response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("elements", [])
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching analytics: {e}")
-            return []
+        for url, params in endpoints:
+            try:
+                print(f"  Trying: {url}")
+                response = requests.get(url, headers=self.headers, params=params)
+                print(f"  Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    elements = data.get("elements", [])
+                    if elements:
+                        print(f"  ✓ Success! Found {len(elements)} analytics records")
+                        return elements
+                else:
+                    print(f"  Response: {response.text[:200]}")
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"  Error: {e}")
+                continue
+        
+        print("  ✗ All analytics endpoints failed")
+        return []
     
     def extract_landing_page(self, creative: Dict) -> Optional[str]:
         """Extract landing page URL from creative content"""
@@ -222,6 +307,18 @@ def main():
     
     # Create client and generate report
     client = LinkedInAdsClient(access_token, account_id)
+    
+    # Test connection first
+    if not client.test_connection():
+        print("\n✗ Failed to connect to LinkedIn API")
+        print("\nPlease check:")
+        print("  1. Your access token is valid (tokens expire after 60 days)")
+        print("  2. Go to https://www.linkedin.com/developers/apps")
+        print("  3. Select your app → Auth tab → Generate new token")
+        print("  4. Ensure the token has r_ads and r_ads_reporting scopes")
+        sys.exit(1)
+    
+    print()
     report_data = generate_report(client, days)
     
     if report_data:
